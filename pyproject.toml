@@ -1,0 +1,16 @@
+
+[tool.pylint.messages_control]
+disable = [
+  "missing-module-docstring",
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "too-few-public-methods"
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src","models","constraint_lib"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

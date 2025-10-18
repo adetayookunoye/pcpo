@@ -1,0 +1,4 @@
+[console_scripts]
+ppo-download = src.data.fetch_preprocess:main
+ppo-eval = src.eval:main
+ppo-train = src.train:main

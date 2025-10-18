@@ -1,0 +1,70 @@
+{
+  "fno": {
+    "l2": 0.17318317294120789,
+    "div": 8.779876225162297e-06,
+    "energy_err": 0.9999979734420776,
+    "vorticity_l2": 0.03291691467165947,
+    "enstrophy_rel_err": 0.9999812245368958,
+    "spectra_dist": 7363.1171875,
+    "pde_residual": 7.82634135276794e-09,
+    "mean_speed_pred": 7.959772483445704e-05,
+    "mean_speed_true": 0.16837257146835327,
+    "spectra_ratio_mean": 2.93255615234375,
+    "spectra_ratio_std": 499.2430725097656
+  },
+  "pino": {
+    "l2": 0.17318317294120789,
+    "div": 8.779876225162297e-06,
+    "energy_err": 0.9999979734420776,
+    "vorticity_l2": 0.03291691467165947,
+    "enstrophy_rel_err": 0.9999812245368958,
+    "spectra_dist": 7363.1171875,
+    "pde_residual": 7.82634135276794e-09,
+    "mean_speed_pred": 7.959772483445704e-05,
+    "mean_speed_true": 0.16837257146835327,
+    "spectra_ratio_mean": 2.93255615234375,
+    "spectra_ratio_std": 499.2430725097656
+  },
+  "bayes_deeponet": {
+    "l2": 0.17326326668262482,
+    "div": 0.00011714183347066864,
+    "energy_err": 0.9998414516448975,
+    "vorticity_l2": 0.03293236717581749,
+    "enstrophy_rel_err": 0.9999240040779114,
+    "spectra_dist": 7363.06787109375,
+    "pde_residual": 2.4623579975013854e-07,
+    "mean_speed_pred": 0.0012056237319484353,
+    "mean_speed_true": 0.16837257146835327,
+    "spectra_ratio_mean": 316331.96875,
+    "spectra_ratio_std": 29844076.0
+  },
+  "divfree_fno": {
+    "l2": 0.1732548177242279,
+    "div": 1.4942774129167447e-08,
+    "energy_err": 0.9999984502792358,
+    "vorticity_l2": 0.03293129429221153,
+    "enstrophy_rel_err": 0.9999815225601196,
+    "spectra_dist": 7363.119140625,
+    "pde_residual": 9.37484756491358e-10,
+    "mean_speed_pred": 3.497703801258467e-06,
+    "mean_speed_true": 0.16837257146835327,
+    "spectra_ratio_mean": 6.463643512688577e-05,
+    "spectra_ratio_std": 0.004135830793529749
+  },
+  "cvae_fno": {
+    "l2": 0.1732548624277115,
+    "div": 1.4845314311173752e-08,
+    "energy_err": 0.9999984502792358,
+    "vorticity_l2": 0.0329313762485981,
+    "enstrophy_rel_err": 0.9999815225601196,
+    "spectra_dist": 7363.119140625,
+    "pde_residual": 1.0446327136648392e-09,
+    "mean_speed_pred": 3.672112143249251e-06,
+    "mean_speed_true": 0.16837257146835327,
+    "spectra_ratio_mean": 6.464109901571646e-05,
+    "spectra_ratio_std": 0.004135835915803909,
+    "coverage_90": 8.392333984375e-05,
+    "sharpness": 9.535603209820387e-12,
+    "crps": 0.10642841458320618
+  }
+}

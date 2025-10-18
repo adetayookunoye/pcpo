@@ -1,0 +1,22 @@
+Metadata-Version: 2.4
+Name: provable_prob_operator
+Version: 0.1.0
+Summary: Provably Constrained Probabilistic Operator Learning (JAX)
+Requires-Python: >=3.10
+Requires-Dist: jax[cpu]>=0.4.26
+Requires-Dist: optax>=0.2.1
+Requires-Dist: h5py>=3.10.0
+Requires-Dist: equinox>=0.11.5
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: scipy>=1.11.0
+Requires-Dist: matplotlib>=3.8.0
+Requires-Dist: tqdm>=4.66.0
+Requires-Dist: einops>=0.7.0
+Requires-Dist: pyyaml>=6.0.1
+Requires-Dist: chex>=0.1.86
+Requires-Dist: pytest>=8.0.0
+Requires-Dist: coverage>=7.4.0
+Requires-Dist: pylint>=3.2.0
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
