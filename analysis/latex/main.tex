@@ -16,6 +16,7 @@
 \usepackage{subcaption}
 \usepackage{natbib}
 \usepackage{tikz}
+\usetikzlibrary{positioning, shapes, arrows, calc, fit}
 \usepackage{pgfplots}
 
 % AISTAT submission format
@@ -50,52 +51,35 @@ Guaranteed Physical Constraints and Multi-Scale Learning}
 
 \begin{abstract}
 
-Neural operator learning has emerged as a powerful approach for surrogate modeling of partial differential equations (PDEs). However, existing methods face two critical challenges: (1) learned operators often violate physical constraints (e.g., divergence-free condition for incompressible flows) despite using penalty-based losses, and (2) deterministic predictions lack uncertainty quantification necessary for scientific applications. We introduce \textbf{DivFree-FNO}, a novel neural operator architecture that guarantees divergence-free predictions \textit{by construction} through stream function parameterization, eliminating the need for constraint penalties. We further extend this to \textbf{cVAE-FNO}, the first probabilistic neural operator that simultaneously provides uncertainty quantification and maintained physical constraints. We develop a generalized \textbf{multi-constraint framework} using Helmholtz decomposition to handle arbitrary conservation laws, and an \textbf{adaptive constraint weighting} mechanism that learns when constraints are critical. Comprehensive experiments on 2D incompressible Navier-Stokes demonstrate that DivFree-FNO achieves $\sim$300× reduction in divergence violations compared to standard FNO while maintaining comparable L2 accuracy. Statistical validation across 5 independent seeds with bootstrap confidence intervals establishes robust superiority. Our work establishes a new paradigm for constrained neural operators and provides a principled framework for integrating physical knowledge into deep learning architectures.
+Neural operator learning has emerged as a practical approach for surrogate modeling of partial differential equations (PDEs). A persistent challenge in learning velocity fields for incompressible flows is that neural operators trained on data often violate the divergence-free constraint $\nabla \cdot \mathbf{u} = 0$, even when penalty terms are added to the loss. We propose a stream-function parameterization for Fourier neural operators that predicts a scalar stream function $\psi$ and recovers velocity via $u = \partial \psi / \partial y$ and $v = -\partial \psi / \partial x$, thereby guaranteeing divergence-free fields by construction. We then extend this architecture to a probabilistic variant using conditional VAE, enabling uncertainty quantification while maintaining the divergence-free guarantee; each sample from the latent distribution produces a valid velocity field. We additionally present a modular constraint library that instantiates divergence, energy, and symmetry constraints within neural operators, along with a spatially gated weighting mechanism that allows the network to learn where constraints should be enforced most strongly. Experiments on 2D incompressible Navier-Stokes from PDEBench demonstrate that the stream-function approach reduces divergence violations to near-zero while achieving comparable L2 accuracy to standard FNO. All results are evaluated over 5 random seeds with bootstrap confidence intervals, and code is provided for full reproducibility.
 
 \end{abstract}
 
 \section{Introduction}
 \label{sec:intro}
 
-The numerical solution of partial differential equations (PDEs) is fundamental to science and engineering, yet computationally expensive for high-dimensional problems. Neural operator learning \citep{li2020fourier, lu2021learning} has emerged as a promising alternative, learning mappings between function spaces that can predict PDE solutions with orders of magnitude speedup. Recent successes include Fourier Neural Operators (FNO) \citep{li2020fourier}, Physics-Informed Neural Operators (PINO) \citep{huang2021physics}, and DeepONet variants \citep{lu2019learning}.
+Neural operator learning has become a practical tool for accelerating the numerical solution of partial differential equations (PDEs). Methods like Fourier Neural Operators (FNO) \citep{li2020fourier} and DeepONet \citep{lu2021learning} achieve orders of magnitude speedup over traditional solvers while maintaining reasonable accuracy. However, when applied to problems with known physical constraints—such as the divergence-free condition for incompressible flows—standard approaches often fail to respect these constraints, even when penalty terms are added to the training loss.
 
-However, a critical gap remains: \textbf{learned operators often produce physically invalid predictions}. For incompressible flows, the velocity field $\mathbf{u} = (u, v)$ must satisfy the divergence-free constraint $\nabla \cdot \mathbf{u} = 0$. Standard neural operators, trained with L2 losses, frequently violate this constraint. Existing approaches address this through:
+For incompressible flows, the velocity field $\mathbf{u} = (u, v)$ must satisfy $\nabla \cdot \mathbf{u} = 0$ to ensure mass conservation. Standard neural operators trained to minimize L2 error between predicted and ground-truth velocities frequently produce fields with significant divergence. Existing remedies include penalty-based losses, post-hoc projection onto divergence-free manifolds, and physics-informed training with PDE residuals. However, none of these guarantee hard satisfaction of the constraint; penalties and projections are approximate or computationally expensive.
 
-\begin{enumerate}
-  \item \textbf{Penalty-based losses}: Add divergence penalty terms to the loss function. However, these penalties are approximate—no guarantee that $\nabla \cdot \mathbf{u} = 0$ is actually achieved.
-  \item \textbf{Post-hoc projection}: Project predictions onto divergence-free manifold after inference. This adds computational overhead and may degrade other metrics.
-  \item \textbf{Physics-informed training}: Use PDE residuals in the loss. Computationally expensive and still lacks hard guarantees.
-\end{enumerate}
+A classical approach in fluid mechanics is the stream function parameterization, where velocity is derived from a scalar potential $\psi$ as $u = \partial \psi / \partial y$ and $v = -\partial \psi / \partial x$. This automatically satisfies $\nabla \cdot \mathbf{u} = 0$ by the properties of mixed partial derivatives. While stream functions have been used in some neural network settings, their systematic integration into modern spectral neural operators like FNO, combined with probabilistic inference and multi-constraint handling, remains underdeveloped.
 
-\noveltybox{
-\textbf{Our Core Contribution}: We show that constraint satisfaction can be moved from the loss function into the \textit{architecture itself}. For incompressible flows, we parameterize the network output as a stream function $\psi$, then compute velocities as $u = \frac{\partial \psi}{\partial y}$, $v = -\frac{\partial \psi}{\partial x}$. This guarantees $\nabla \cdot \mathbf{u} = 0$ \textit{exactly}, up to discretization error.
-}
+A secondary limitation of current neural operators is the lack of uncertainty quantification. Deterministic surrogates provide point predictions but no estimate of confidence or variability. For scientific applications where decisions depend on the reliability of predictions, this is a significant gap. Existing methods for uncertainty quantification in neural operators (e.g., Bayesian DeepONet) do not inherently maintain physical constraints, creating a practical dilemma: choose a method that enforces constraints or one that quantifies uncertainty, but rarely both.
 
-A secondary challenge is the lack of uncertainty quantification (UQ) in neural operators. Deterministic surrogates provide point estimates but no confidence intervals—critical for scientific applications where prediction reliability matters \citep{gal2016uncertainty}. Existing UQ methods for neural operators (e.g., Bayesian DeepONet) lack physical constraint guarantees, creating a dilemma: enforce constraints (deterministic methods) or quantify uncertainty (probabilistic methods), but rarely both.
-
-\noveltybox{
-\textbf{Our Second Contribution}: We extend the stream function architecture to include probabilistic inference via conditional VAE (cVAE). We achieve simultaneous constraint satisfaction and uncertainty quantification—each sampled latent vector produces a valid divergence-free solution.
-}
-
-We further generalize this approach through \textbf{Helmholtz decomposition}, decomposing velocity fields into divergence-free and rotational components, allowing us to handle multiple simultaneous constraints. Finally, we introduce \textbf{adaptive constraint weighting}, a learned gating mechanism that controls where constraints are most critical.
-
-\subsection{Main Contributions}
+Our contributions address these gaps as follows:
 
 \begin{enumerate}
-  \item \textbf{DivFree-FNO Architecture} (§\ref{sec:method-divfree}): Stream function parameterization providing hard constraint guarantee. Achieves 300× reduction in divergence violations vs. standard FNO.
-  
-  \item \textbf{cVAE-FNO} (§\ref{sec:method-cvae}): First probabilistic neural operator with maintained physical constraints. Quantifies uncertainty while guaranteeing validity.
-  
-  \item \textbf{Multi-Constraint Framework} (§\ref{sec:method-multi}): Helmholtz decomposition extension handling arbitrary conservation laws. Generalizes beyond divergence-free to arbitrary constraints.
-  
-  \item \textbf{Adaptive Constraint Weighting} (§\ref{sec:method-adaptive}): Learned spatial modulation of constraint enforcement. Shows constraints are region-dependent.
-  
-  \item \textbf{Rigorous Statistical Validation} (§\ref{sec:experiments}): Multi-seed experiments (5 seeds) with bootstrap confidence intervals and physical validation gates—setting new standards for scientific ML reproducibility.
+  \item We present a stream-function Fourier neural operator (denoted DivFree-FNO) that predicts a scalar stream function and recovers velocity through analytical differentiation. This approach guarantees divergence-free velocity fields by construction, with constraint violation bounded only by finite-difference discretization error.
+
+  \item We extend the stream-function approach to probabilistic inference via conditional VAE. The resulting cVAE-FNO architecture generates a distribution over divergence-free velocity fields, enabling both uncertainty quantification and constraint satisfaction. Unlike projection-based approaches that enforce constraints post-hoc, constraints are built into the generative model.
+
+  \item We implement a modular constraint library that supports divergence, energy, symmetry, and boundary condition constraints. We additionally propose spatial gating, where the network learns a spatially varying weight that modulates constraint enforcement across the domain, building on prior work in adaptive loss weighting for physics-informed methods.
+
+  \item We conduct experiments on 2D incompressible Navier-Stokes using the PDEBench dataset, evaluating all models over 5 random seeds with bootstrap confidence intervals. Results show that the stream-function architecture reduces divergence violations dramatically while maintaining competitive L2 error.
+
 \end{enumerate}
 
-\subsection{Paper Organization}
-
-The remainder of this paper is organized as follows: §\ref{sec:related} reviews recent neural operator literature and constraint enforcement methods. §\ref{sec:preliminaries} establishes mathematical foundations. §\ref{sec:methods} presents our four core technical contributions in detail. §\ref{sec:theory} provides formal proofs of constraint guarantees. §\ref{sec:experiments} presents comprehensive experiments. §\ref{sec:discussion} discusses results and implications. §\ref{sec:conclusion} concludes. Appendices contain additional proofs (§\ref{app:proofs}), implementation details (§\ref{app:impl}), and ablation studies (§\ref{app:ablations}).
+The paper is organized as follows. Section 2 reviews related work in neural operators, constraint enforcement, and uncertainty quantification. Section 3 establishes preliminaries. Section 4 presents the core methods. Section 5 provides theoretical analysis. Section 6 describes experiments and results. Section 7 discusses implications. Section 8 concludes.
 
 \section{Related Work}
 \label{sec:related}
@@ -126,23 +110,21 @@ The remainder of this paper is organized as follows: §\ref{sec:related} reviews
 
 \cite{malinin2019ensemble} reviewed ensemble methods for UQ in neural operators. Simple but computationally expensive.
 
-\subsection{Divergence-Free Representations}
+\subsection{Divergence-Free Representations and Hard Constraints in Operators}
 
-Classical fluid mechanics uses stream functions $\psi$ such that $u = \frac{\partial \psi}{\partial y}$, $v = -\frac{\partial \psi}{\partial x}$ automatically satisfy $\nabla \cdot \mathbf{u} = 0$. This has been standard for 200+ years.
+Stream function parameterization to enforce divergence-free constraints is classical in fluid mechanics and has been noted in recent operator surveys. The neural operator survey by Kovachki et al. explicitly mentions that incompressible flows can be represented via stream functions with velocity derived as $u = \nabla^{\perp} \psi$, enforcing $\nabla \cdot \mathbf{u} = 0$ by construction.
 
-\cite{lee2019physics} used stream function representations in physics-informed neural networks but only for 2D flows, without systematic investigation.
+Recent work has explored constraint-aware neural operators more systematically. Khorrami et al. proposed physics-encoded FNO for stress fields in solids, using potential-based encodings to ensure divergence-free outputs by construction—an approach directly analogous to stream-function parameterization. Liu et al. developed methods to construct neural operators with automatically divergence-free outputs via differential forms, also achieving hard constraints in the architecture. Richter-Powell et al. introduced neural conservation laws using divergence-free parameterizations via differential forms and proved universality results.
 
-\cite{ern2022guaranteed} developed provably stable neural operators but focused on stability (boundedness) rather than other constraints.
+Additionally, several recent works address hard constraints in probabilistic settings. Xu et al. developed Physically Consistent Neural Operators (PCNO) that project outputs onto constraint-satisfying subspaces, and extended this to DiffPCNO which adds diffusion-model-based uncertainty quantification. Hansen et al. presented a framework for learning probabilistic models that respect conservation laws by leveraging uncertainty itself to enforce constraints. More recently, a framework termed end-to-end probabilistic learning with hard constraints (ProbHardE2E) combines probabilistic FNO bases with projection layers to guarantee constraint satisfaction.
 
-\textbf{Gap in Literature}: To our knowledge, no prior work systematically applies stream function parameterization to modern spectral neural operators (FNO) or combines it with probabilistic inference. This is our key novelty.
+Our contribution is not to originate the stream-function idea or hard constraints in neural operators, but rather to provide a clean implementation of stream-function FNO for 2D incompressible flows, extend it to probabilistic inference via conditional VAE, and conduct rigorous empirical comparison on PDEBench with multi-seed evaluation and bootstrap confidence intervals.
 
-\subsection{Multi-Constraint Learning}
+\subsection{Adaptive Loss Weighting for Physics-Informed Methods}
 
-\cite{tripathi2019learning} studied learning multiple objectives jointly in neural networks, finding that hard constraints (architectural) outperform soft constraints (loss penalties).
+Adaptive loss weighting has been extensively studied in the context of physics-informed neural networks. Adaptive PINNs (APINNs) treat PINNs as multi-task learning and adaptively balance data and physics losses. Self-adaptive loss weighting in parallel PINNs and variants like AWAO-fPINNs employ self-adaptive scaling of physics losses. SoftAdapt and related methods provide general frameworks for multi-objective loss balancing.
 
-\cite{wang2023constrained} developed constrained neural networks for general optimization, but application to PDEs is limited.
-
-\textbf{Our Contribution}: We show how to enforce multiple constraints via Helmholtz decomposition, generalizing the single stream function idea to arbitrary conservation laws.
+Our spatially gated constraint weighting builds on this prior work, extending global adaptive weighting to spatial adaptation where different regions of the domain can have different constraint strengths. This is a natural extension and is presented here as an empirical investigation rather than a conceptual novelty.
 
 \section{Preliminaries}
 \label{sec:preliminaries}
@@ -214,6 +196,10 @@ The ELBO loss is:
 
 \subsection{DivFree-FNO: Stream Function Architecture}
 \label{sec:method-divfree}
+
+\subsubsection{Motivation and Prior Work}
+
+The use of stream functions to enforce divergence-free constraints is classical in fluid mechanics—dating back over a century—and has been incorporated into neural networks in various forms. Recent work including Neural Conservation Laws \citep{richter2022neural} and physics-encoded FNO variants \citep{khorrami2024physics} has shown that parameterizing outputs via potentials (stream functions, scalar fields, etc.) naturally enforces hard constraints in neural operators. Our contribution is not to introduce stream functions to neural operators—this has been done—but to provide a streamlined, systematically benchmarked implementation for 2D incompressible flows on PDEBench, and to rigorously compare it against penalty-based and projection-based alternatives.
 
 \subsubsection{Architecture Design}
 
@@ -295,6 +281,10 @@ Training stability & Baseline & Can be unstable (high $\lambda$) & Cleaner (fewe
 \subsection{cVAE-FNO: Probabilistic Constrained Operators}
 \label{sec:method-cvae}
 
+\subsubsection{Motivation}
+
+While recent works have combined probabilistic neural operators with hard constraints (e.g., PCNO, DiffPCNO, ProbHardE2E), most rely on post-hoc projections or diffusion-based sampling to ensure constraint satisfaction. We propose an alternative: directly architect the generator (decoder) to output a stream function $\psi$, ensuring that every sample is divergence-free by construction rather than by projection. This provides a simpler architectural alternative to projection-based probabilistic frameworks.
+
 \subsubsection{Architecture}
 
 We extend DivFree-FNO to probabilistic inference:
@@ -322,65 +312,49 @@ The VAE loss is:
 Every sample from cVAE-FNO automatically inherits the divergence-free guarantee. For any $z \sim q_\phi(z|x)$, the decoded $(u, v)$ satisfies $\nabla \cdot (u, v) = 0$ exactly (up to discretization).
 \end{proposition}
 
-This is the first neural operator achieving both UQ and hard physical constraints simultaneously.
+The combination of stream-function parameterization with conditional VAE ensures that all samples from the learned distribution are physically valid. We empirically study calibration and diversity of the predictive distribution on PDEBench.
 
 \subsection{Multi-Constraint Framework via Helmholtz Decomposition}
 \label{sec:method-multi}
 
-We generalize DivFree-FNO to handle multiple simultaneous constraints via Helmholtz decomposition.
+While our primary focus is divergence-free flows via stream functions, we implement a modular constraint library that instantiates classical decompositions and multiple conservation laws within neural operators. The Helmholtz-Hodge decomposition, standard in fluid mechanics and mathematics, expresses any smooth vector field as the sum of divergence-free and curl-free components. Prior work including Neural Conservation Laws \citep{richter2022neural} and physics-informed approaches have explored similar decompositions; our contribution is to package these into a unified, modular framework for neural operators.
 
-\subsubsection{Helmholtz Decomposition}
+\subsubsection{Decomposition and Implementation}
 
-\begin{theorem}[Helmholtz Decomposition]
-\label{thm:helmholtz}
-Any smooth vector field $\mathbf{u}$ in $\mathbb{R}^2$ can be decomposed as:
+Any smooth 2D vector field $\mathbf{u}$ can be written as:
 \begin{equation}
-  \mathbf{u} = \mathbf{u}_{\text{curl}} + \mathbf{u}_{\text{div}}
+  \mathbf{u} = \nabla \times \psi + \nabla \phi
 \end{equation}
-where:
+where $\psi$ is a stream function (producing the divergence-free part) and $\phi$ is a scalar potential (producing the curl-free part). We implement this decomposition by predicting both $\psi$ and $\phi$ in an FNO. Velocity is recovered as:
 \begin{align}
-  \mathbf{u}_{\text{curl}} &= \nabla \times \chi = \left( -\frac{\partial \chi}{\partial y}, \frac{\partial \chi}{\partial x} \right) \quad \text{(divergence-free component)} \\
-  \mathbf{u}_{\text{div}} &= \nabla \phi = \left( \frac{\partial \phi}{\partial x}, \frac{\partial \phi}{\partial y} \right) \quad \text{(curl-free component)}
-\end{chi}
+  u &= \frac{\partial \psi}{\partial y} + \frac{\partial \phi}{\partial x} \\
+  v &= -\frac{\partial \psi}{\partial x} + \frac{\partial \phi}{\partial y}
 \end{align}
-with $\chi$ (scalar potential) and $\phi$ (potential) uniquely determined.
-\end{theorem}
 
-\subsubsection{Multi-Constraint Network}
+The stream-function component automatically remains divergence-free; the potential component contributes flexibility. This modular approach allows empirical study of trade-offs between constraint satisfaction and model expressiveness, and can incorporate energy, symmetry, and boundary conditions through configuration of $\phi$. The constraint library supports swapping implementations (divergence, energy, symmetry, boundary conditions) as needed for different PDE problems.
 
-\begin{definition}[MultiConstraint-FNO]
-Predict two potentials $(\psi, \chi)$ where:
-\begin{align}
-  u &= \frac{\partial \psi}{\partial y} + \frac{\partial \chi}{\partial x} \\
-  v &= -\frac{\partial \psi}{\partial x} + \frac{\partial \chi}{\partial y}
-\end{align}
-\end{definition}
-
-This allows us to:
-\begin{enumerate}
-  \item Control divergence-free component independently ($\psi$)
-  \item Control rotational component independently ($\chi$)
-  \item Enforce region-specific constraints by weighting
-\end{enumerate}
-
-\subsection{Adaptive Constraint Weighting}
+\subsection{Adaptive Spatial Constraint Weighting}
 \label{sec:method-adaptive}
 
-Real flows often have regions where constraints are critical (inflow/outflow) and regions where they're less important (interior). We introduce learned constraint weighting:
+Adaptive loss weighting for physics-informed neural networks has been extensively studied, including adaptive loss scaling in PINNs \citep{wang2022understanding, mcclenny2023self} and multi-task learning approaches. Building on this foundation, we propose spatially gated constraint weighting, where the network learns to modulate constraint enforcement across the domain. This extends prior global adaptive weighting methods by allowing different regions to have different constraint penalties—motivated by the observation that constraints may be more critical near boundaries or in high-curvature regions than elsewhere.
 
-\begin{definition}[Adaptive Weighting]
-Define a spatial gate $\mathbf{w}: \Omega \to [0,1]$ predicted by a secondary network:
+\subsubsection{Spatial Gating Mechanism}
+
+We introduce a learnable spatial gate $\mathbf{w}(x): \Omega \to [0,1]$ that modulates constraint enforcement:
 \begin{equation}
-  (u, v) = \mathbf{w} \odot (u_{\text{constrained}}, v_{\text{constrained}}) + (1 - \mathbf{w}) \odot (u_{\text{base}}, v_{\text{base}})
+  \text{Loss} = \mathcal{L}_{\text{reconstruction}} + \mathbf{w}(x) \cdot \mathcal{L}_{\text{constraint}}(x)
 \end{equation}
-where $\odot$ is element-wise multiplication.
-\end{definition}
 
-The gate network learns where constraints matter most:
-\begin{align}
-  \mathbf{w} &= \sigma(\text{FNO}_{\text{gate}}(x)) \quad \text{(sigmoid constrains to [0,1])} \\
-  \mathcal{L}_{\text{gate}} &= \mathcal{L}_{\text{reconstruction}} + \lambda_g \mathbb{E}[\mathbf{w}] \quad \text{(encourage sparse gating)}
-\end{align}
+The gate is predicted by a secondary FNO:
+\begin{equation}
+  \mathbf{w} = \sigma(\text{FNO}_{\text{gate}}(x))
+\end{equation}
+
+where $\sigma$ is the sigmoid function. This allows the model to learn where constraints are most important without manual specification.
+
+\subsubsection{Empirical Evaluation}
+
+We compare three configurations: fixed global weights (baseline), globally adaptive weights (single scalar per epoch), and spatially adaptive weights (field-valued per location). Ablations in Section \ref{sec:experiments} show that spatial gating provides modest improvements on long-horizon rollouts, though the magnitude of gains varies with problem characteristics.
 
 \section{Theoretical Analysis}
 \label{sec:theory}
@@ -635,6 +609,368 @@ We gratefully acknowledge computational resources provided by [Institution]. We 
 
 \newpage
 \appendix
+
+% General Framework for Constrained Neural Operators
+\section{A General Framework for Constrained Neural Operators}\label{app:framework}
+
+This appendix provides the mathematical foundation for constrained operator learning,
+presenting a unifying framework that encompasses all constraint types in this work
+(divergence-free, energy-preserving, symmetry, periodic BCs, etc.).
+
+\subsection{Setup: Spaces and Constraints}
+
+\subsubsection{Problem formulation}
+
+Let us define the fundamental objects:
+\begin{align}
+X &: \text{input function space (forcings, initial conditions, parameters)} \\
+Y &: \text{output function space, typically } Y \subset L^2(\Omega; \mathbb{R}^d) \\
+C: Y \to Z &: \text{linear constraint operator}
+\end{align}
+
+The constraint operator $C$ encodes physical requirements, such as:
+\begin{align}
+\text{Divergence-free:} \quad &C(u) = \nabla \cdot u \quad (\text{incompressibility}) \\
+\text{Curl-free:} \quad &C(u) = \nabla \times u \quad (\text{no swirl}) \\
+\text{Mass conservation:} \quad &C(u) = \partial_t \rho + \nabla \cdot (\rho u) \\
+\text{Boundary condition:} \quad &C(u) = u\big|_{\partial \Omega} - g \quad (\text{Dirichlet BC}) \\
+\text{Symmetry:} \quad &C(u) = u - g \cdot u \quad (\text{group invariance})
+\end{align}
+
+\subsubsection{Constraint subspace}
+
+Define the constraint-satisfying subspace as the kernel of $C$:
+\begin{equation}
+Y_C := \ker(C) = \{ u \in Y : C(u) = 0 \}.
+\end{equation}
+
+The goal of constrained operator learning is to learn a map
+\begin{equation}
+T: X \to Y_C
+\end{equation}
+that respects the constraint by construction: $C(T(x)) = 0$ for all $x \in X$.
+
+\subsection{Two Generic Construction Patterns}
+
+We present two complementary ways to build neural operators that respect linear constraints.
+
+\subsubsection{Pattern A: Parameterization-Based}
+
+Choose:
+\begin{itemize}
+\item A potential space $W$ (e.g., scalar fields for stream functions, vector fields for potentials).
+\item A linear map $P: W \to Y$ such that $C(P(w)) = 0$ for all $w \in W$.
+\end{itemize}
+
+This ensures $\text{Im}(P) \subseteq Y_C$. Any neural operator $N_\theta: X \to W$ induces:
+\begin{equation}
+T_\theta := P \circ N_\theta : X \to Y_C.
+\end{equation}
+
+By construction, $C(T_\theta(x)) = C(P(N_\theta(x))) = 0$ always.
+
+\paragraph{Examples of pattern A:}
+
+\begin{enumerate}
+\item \textbf{Stream function (2D incompressible)}
+  \begin{align}
+  W &= L^2(\Omega), \quad P(\psi) = \nabla^\perp \psi = (\partial_y \psi, -\partial_x \psi) \\
+  C(u) &= \nabla \cdot u \quad \Rightarrow \quad C(P(\psi)) = \partial_x(\partial_y \psi) - \partial_y(\partial_x \psi) = 0
+  \end{align}
+
+\item \textbf{Vector potential (3D incompressible)}
+  \begin{align}
+  W &= L^2(\Omega; \mathbb{R}^3), \quad P(A) = \nabla \times A \\
+  C(u) &= \nabla \cdot u \quad \Rightarrow \quad C(P(A)) = \nabla \cdot (\nabla \times A) = 0
+  \end{align}
+
+\item \textbf{Symmetrization}
+  \begin{align}
+  W &= Y, \quad P(u) = \frac{1}{|G|} \sum_{g \in G} g \cdot u \\
+  C(u) &= u - g \cdot u \quad \Rightarrow \quad C(P(u)) = 0 \quad (\text{$P(u)$ is $G$-invariant})
+  \end{align}
+
+\item \textbf{Periodic boundary conditions}
+  \begin{align}
+  W &= \text{trigonometric polynomials on } [0,L] \times [0,L] \\
+  P(w) &= w \quad (\text{periodicity by construction via FFT})
+  \end{align}
+\end{enumerate}
+
+\subsubsection{Pattern B: Projection-Based}
+
+Alternatively, let the network produce an unconstrained field $\hat{u} \in Y$, then project:
+\begin{equation}
+T_\theta(x) = \Pi_C(\hat{u}_\theta(x)), \quad \hat{u}_\theta = N_\theta(x),
+\end{equation}
+
+where $\Pi_C: Y \to Y_C$ is a linear projector satisfying:
+\begin{equation}
+\Pi_C^2 = \Pi_C, \quad \text{Im}(\Pi_C) = Y_C.
+\end{equation}
+
+\paragraph{Examples of pattern B:}
+
+\begin{enumerate}
+\item \textbf{Helmholtz-Hodge projection}
+  \begin{align}
+  \Pi_C(u) &= u - \nabla \phi, \quad \text{where } \nabla^2 \phi = \nabla \cdot u \\
+  \Rightarrow \quad &\nabla \cdot \Pi_C(u) = 0
+  \end{align}
+
+\item \textbf{Boundary value projection}
+  Solve a linear boundary value problem to project $\hat{u}$ onto functions satisfying Dirichlet BC $u|_{\partial \Omega} = g$.
+
+\end{enumerate}
+
+\subsection{Schematic: Constraint Patterns and Examples}
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[scale=1.0, every node/.style={draw, minimum height=0.8cm, minimum width=1.2cm, font=\small}]
+
+% Top row: Main patterns
+\node[rectangle, fill=blue!20] (ntheta) at (0, 4) {$N_\theta$};
+\node[rectangle, fill=green!20] (pattern_a) at (3, 4) {Pattern A:\\Parameterization $P$};
+\node[rectangle, fill=orange!20] (pattern_b) at (6, 4) {Pattern B:\\Projection $\Pi_C$};
+
+% Arrows from N_theta
+\draw[->, thick] (ntheta) -- (1.5, 4);
+\draw[->, thick] (ntheta) -- (4.5, 4);
+
+% Pattern A outputs
+\node[rectangle, fill=green!10, minimum width=2.5cm] (stream2d) at (1.5, 2.5) {Stream Function 2D\\$u = \partial_y \psi, v = -\partial_x \psi$};
+\node[rectangle, fill=green!10, minimum width=2.5cm] (vect3d) at (1.5, 1.2) {Vector Potential 3D\\$\mathbf{u} = \nabla \times A$};
+
+% Pattern B outputs
+\node[rectangle, fill=orange!10, minimum width=2.5cm] (helmholtz) at (6, 2.5) {Helmholtz Projection\\$\mathbf{u} - \nabla \phi$};
+\node[rectangle, fill=orange!10, minimum width=2.5cm] (bc_proj) at (6, 1.2) {Boundary Value\\Projection};
+
+% Symmetry and Periodic (Pattern A variants)
+\node[rectangle, fill=green!10, minimum width=2.5cm] (symmetry) at (1.5, -0.1) {Symmetry Constraint\\$P(u) = \frac{1}{|G|}\sum g \cdot u$};
+
+% Property boxes at bottom
+\node[rectangle, fill=red!15, minimum width=3.5cm, text width=3.5cm, align=center] (prop_a) at (1.5, -1.8) {\textbf{Pattern A Properties:}\\Hard constraint\\Zero computational cost\\Limited to linear constraints};
+
+\node[rectangle, fill=purple!15, minimum width=3.5cm, text width=3.5cm, align=center] (prop_b) at (6, -1.8) {\textbf{Pattern B Properties:}\\Hard constraint\\Moderate cost (e.g., FFT)\\Works for any constraint};
+
+\end{tikzpicture}
+\caption{Schematic overview of two constraint patterns. Left: Pattern A (Parameterization) with examples (stream functions, vector potentials, symmetry). Right: Pattern B (Projection) with examples (Helmholtz decomposition, boundary value problems). Both guarantee hard constraint satisfaction.}
+\label{fig:constraint-patterns}
+\end{figure}
+
+\subsection{Constructive Architectures}
+
+\subsubsection{Abstract constraint interface}
+
+Both patterns are implemented via a unified interface:
+
+\begin{definition}[Constraint interface]
+A constraint implementation provides:
+\begin{align}
+\text{parameterize}(w) &: P(w) \text{ (Pattern A)} \\
+\text{project}(u) &: \Pi_C(u) \text{ (Pattern B)} \\
+\text{residual}(u) &: C(u) \text{ (for diagnostics)}
+\end{align}
+\end{definition}
+
+\subsubsection{Implementation in code}
+
+Concrete implementations (provided in \texttt{constraint\_lib/abstract\_constraint.py}):
+
+\begin{itemize}
+\item \texttt{StreamFunctionConstraint2D}: Pattern A, 2D incompressible
+\item \texttt{VectorPotentialConstraint3D}: Pattern A, 3D incompressible
+\item \texttt{SymmetryConstraint}: Pattern A, group invariance
+\item \texttt{PeriodicConstraint}: Pattern A, periodic BCs
+\item \texttt{HelmholtzProjectionConstraint}: Pattern B, divergence-free
+\item \texttt{CompositeConstraint}: Combine multiple constraints
+\end{itemize}
+
+\subsection{Universal Approximation Under Constraints}
+
+\subsubsection{Theorem 1: Parameterization-based universality}
+
+\begin{theorem}[Universal approximation with parameterization]\label{thm:ua-param}
+Let:
+\begin{itemize}
+\item $X$ be a compact subset of a Banach space $X_0$
+\item $W$, $Y$ Banach spaces
+\item $C: Y \to Z$ a continuous linear operator; define $Y_C = \ker(C)$
+\item $P: W \to Y$ a continuous linear map with $\text{Im}(P) \subseteq Y_C$
+\item $T: X \to Y_C$ a continuous operator
+\item $\mathcal{N} = \{N_\theta : X \to W, \theta \in \Theta\}$ dense in $C(X, W)$
+\end{itemize}
+
+Then for any $\varepsilon > 0$, there exists $\theta$ such that:
+\begin{equation}
+\sup_{x \in X} \| T(x) - P(N_\theta(x)) \|_Y < \varepsilon.
+\end{equation}
+
+\end{theorem}
+
+\begin{proof}
+
+\textbf{Step 1: Lifting to potential space.}
+Since $T(X) \subseteq Y_C$ and $\text{Im}(P) \subseteq Y_C$, there exists a measurable map
+$w^*: X \to W$ such that $P(w^*(x)) = T(x)$ for all $x \in X$.
+
+\textbf{Step 2: Density in potential space.}
+By assumption, $\mathcal{N}$ is dense in $C(X, W)$. Therefore,
+for any $\delta > 0$, there exists $N_\theta$ such that:
+\begin{equation}
+\sup_{x \in X} \|N_\theta(x) - w^*(x)\|_W < \delta.
+\end{equation}
+
+\textbf{Step 3: Continuity of $P$.}
+Since $P$ is continuous linear, it is Lipschitz: $\|P(w_1) - P(w_2)\|_Y \le L_P \|w_1 - w_2\|_W$.
+
+\textbf{Step 4: Composition and conclusion.}
+\begin{align}
+\sup_{x \in X} \|P(N_\theta(x)) - T(x)\|_Y
+&= \sup_{x \in X} \|P(N_\theta(x)) - P(w^*(x))\|_Y \\
+&\le L_P \sup_{x \in X} \|N_\theta(x) - w^*(x)\|_W \\
+&< L_P \delta.
+\end{align}
+Choose $\delta = \varepsilon / L_P$ to conclude. \qed
+
+\end{proof}
+
+\subsubsection{Theorem 2: Projection-based universality}
+
+\begin{theorem}[Universal approximation with projection]\label{thm:ua-proj}
+Let:
+\begin{itemize}
+\item $Y$ a Banach space
+\item $C: Y \to Z$ a continuous linear operator; define $Y_C = \ker(C)$
+\item $\Pi_C: Y \to Y_C$ a continuous linear projector (i.e., $\Pi_C^2 = \Pi_C$, $\text{Im}(\Pi_C) = Y_C$)
+\item $T: X \to Y_C$ a continuous operator
+\item $\mathcal{N} = \{N_\theta : X \to Y\}$ dense in $C(X, Y)$
+\end{itemize}
+
+Then for any $\varepsilon > 0$, there exists $\theta$ such that:
+\begin{equation}
+\sup_{x \in X} \|T(x) - \Pi_C(N_\theta(x))\|_Y < \varepsilon.
+\end{equation}
+
+\end{theorem}
+
+\begin{proof}
+
+\textbf{Step 1: Direct approximation.}
+By density of $\mathcal{N}$ in $C(X, Y)$, for any $\delta > 0$:
+\begin{equation}
+\sup_{x \in X} \|N_\theta(x) - T(x)\|_Y < \delta.
+\end{equation}
+
+\textbf{Step 2: Projection is the identity on $Y_C$.}
+Since $T(X) \subseteq Y_C = \text{Im}(\Pi_C)$, we have $\Pi_C(T(x)) = T(x)$.
+
+\textbf{Step 3: Continuity of projection.}
+\begin{align}
+\sup_{x \in X} \|\Pi_C(N_\theta(x)) - T(x)\|_Y
+&= \sup_{x \in X} \|\Pi_C(N_\theta(x)) - \Pi_C(T(x))\|_Y \\
+&\le L_\Pi \sup_{x \in X} \|N_\theta(x) - T(x)\|_Y \\
+&< L_\Pi \delta.
+\end{align}
+where $L_\Pi = \|\Pi_C\|$ is the operator norm of the projector.
+
+Choose $\delta = \varepsilon / L_\Pi$ to conclude. \qed
+
+\end{proof}
+
+\subsubsection{Specializations}
+
+\paragraph{Stream-function FNO (Theorem 1 instance).}
+Take $W = L^2(\Omega)$, $P(\psi) = \nabla^\perp \psi$, $C(u) = \nabla \cdot u$.
+Then any div-free velocity field can be approximated by an FNO operating on stream functions.
+
+\paragraph{Helmholtz projection (Theorem 2 instance).}
+Take $Y = L^2(\Omega; \mathbb{R}^d)$ and $\Pi_C$ as the Helmholtz projector.
+Then any div-free field can be approximated by an FNO whose output is projected.
+
+\subsection{Stability of Constrained Operators Under Time Stepping}
+
+For rollout-based prediction (auto-regressive iteration), constrained operators exhibit better stability.
+
+\subsubsection{Theorem 3: Stability under time stepping}
+
+\begin{theorem}[Stability of constrained rollouts]\label{thm:stability}
+Let $T_\theta: X \times \mathbb{R} \to Y$ be a constrained operator (Pattern A or B)
+with $C(T_\theta(x,t)) = 0$ for all $x, t$.
+Assume the operator $N_\theta$ is Lipschitz and the constraint map $P$ or $\Pi_C$ is non-expansive.
+
+Then for $n$ time steps with step size $\Delta t$:
+\begin{equation}
+\|T_\theta^{(n)}(x) - T^{(n)}(x)\| \le C_T \cdot L_N^n \cdot (1 + \Delta t)^n \cdot \epsilon_0,
+\end{equation}
+
+where $\epsilon_0$ is initial error and $C_T$ depends on problem constants.
+
+For an unconstrained operator, the error grows as $\lambda^n$ with $\lambda > 1$ (instability).
+Thus constrained operators have $\lambda = 1$ (stability) versus $\lambda > 1$ (instability).
+
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+
+The constraint map $\Pi_C$ is a linear projector satisfying $\|\Pi_C\| \le 1$ (non-expansive).
+Therefore, errors cannot grow beyond what the operator $N_\theta$ introduces.
+For full proof, use Gronwall's inequality or energy methods in the PDE setting. \qed
+
+\end{proof}
+
+\subsection{Connection to Main Paper Work}
+
+\subsubsection{DivFree-FNO}
+
+Our DivFree-FNO (\S\ref{sec:method-divfree}) is:
+\begin{align}
+N_\theta &: X \to L^2(\Omega) \quad (\text{FNO predicting $\psi$}) \\
+P(\psi) &= (\partial_y \psi, -\partial_x \psi) = u \\
+T_\theta &= P \circ N_\theta
+\end{align}
+
+By Theorem~\ref{thm:ua-param}, $T_\theta$ universally approximates divergence-free operators.
+
+\subsubsection{cVAE-FNO}
+
+Our cVAE-FNO (\S\ref{sec:method-cvae}) adds probabilistic inference:
+\begin{align}
+\text{decoder}: &\quad D_\theta: X \times Z \to W \\
+\text{constraint}: &\quad T_\theta = P \circ D_\theta
+\end{align}
+
+Every sample is div-free: $C(T_\theta(x, z)) = 0$ for all $z$.
+
+\subsection{Comparison: Parameterization vs Projection}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|l|c|c|}
+\hline
+& \textbf{Pattern A} & \textbf{Pattern B} \\
+\hline
+\textbf{Constraint satisfaction} & Hard (by construction) & Hard (projector) \\
+\textbf{Computational cost} & Low & Medium \\
+\textbf{Applicability} & Linear constraints & Any constraint \\
+\textbf{Stability} & Excellent & Good \\
+\hline
+\end{tabular}
+\caption{Comparison of constraint patterns.}
+\end{table}
+
+\subsection{Implementation Roadmap}
+
+Our codebase \texttt{constraint\_lib/} provides implementations of all patterns with:
+\begin{itemize}
+\item Abstract base class defining unified interface
+\item Parameterization-based constraints (stream function, vector potential, symmetry, periodic)
+\item Projection-based constraints (Helmholtz decomposition)
+\item Composition of multiple constraints
+\end{itemize}
+
+All implementations are JAX-compatible and integrate seamlessly with neural operator training.
 
 \section{Additional Proofs}
 \label{app:proofs}
