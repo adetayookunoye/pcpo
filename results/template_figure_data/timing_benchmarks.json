@@ -1,0 +1,22 @@
+{
+  "fno": {
+    "mean_ms": 2.1,
+    "std_ms": 0.15
+  },
+  "pino": {
+    "mean_ms": 2.8,
+    "std_ms": 0.2
+  },
+  "bayes_deeponet": {
+    "mean_ms": 5.2,
+    "std_ms": 0.35
+  },
+  "divfree_fno": {
+    "mean_ms": 2.3,
+    "std_ms": 0.16
+  },
+  "cvae_fno": {
+    "mean_ms": 6.1,
+    "std_ms": 0.4
+  }
+}

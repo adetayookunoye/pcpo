@@ -1,4 +1,4 @@
-.PHONY: init download train-% eval-% train-all eval-all aggregate plots compare gates validate test lint zip reproduce-all deploy
+.PHONY: init download train-% eval-% train-all eval-all aggregate plots compare gates validate test lint zip reproduce-all deploy post-training
 
 ENV_NAME ?= ppojax
 MODELS   := fno pino bayes_deeponet divfree_fno cvae_fno
@@ -42,10 +42,16 @@ aggregate:
 plots:
 	python -m analysis.compare_plots --csv results/compare.csv --outdir results/figures
 
+figures:
+	python -m src.analysis.generate_publication_figures --config config.yaml --results-dir results --outdir results/figures
+
 gates:
 	python -m analysis.gates --csv results/compare.csv
 
-compare: train-all eval-all aggregate plots gates
+post-training:
+	python -m src.post_training --config config.yaml --results-dir results --figures-dir results/figures
+
+compare: train-all eval-all post-training
 
 validate:
 	python -m src.qa.validate_physics --results results
@@ -59,7 +65,7 @@ lint:
 zip:
 	python -m src.packaging.make_zip --out final_solution.zip
 
-reproduce-all: init download train-all eval-all aggregate plots gates zip
+reproduce-all: init download train-all eval-all post-training validate zip
 
 deploy:
 	docker build -t ppojax:latest .

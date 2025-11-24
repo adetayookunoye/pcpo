@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import time
 from typing import Dict, List
 
 import jax
@@ -177,12 +178,28 @@ def evaluate_model(
         y_pred = dataset.denormalize_output(y_pred_norm)
         metrics = _deterministic_metrics(y_pred, y_raw)
         augment_metrics(metrics, y_pred, y_raw, metric_cfg)
+        # Non-probabilistic: set UQ metrics to NaN for consistency
+        metrics.update(
+            {
+                "coverage_90": float("nan"),
+                "sharpness": float("nan"),
+                "crps": float("nan"),
+            }
+        )
         return metrics
 
     y_pred_norm = model(x_norm)
     y_pred = dataset.denormalize_output(y_pred_norm)
     metrics = _deterministic_metrics(y_pred, y_raw)
     augment_metrics(metrics, y_pred, y_raw, metric_cfg)
+    # Non-probabilistic: set UQ metrics to NaN for consistency
+    metrics.update(
+        {
+            "coverage_90": float("nan"),
+            "sharpness": float("nan"),
+            "crps": float("nan"),
+        }
+    )
     return metrics
 
 
@@ -276,6 +293,26 @@ def main():
         output_path = args.output or os.path.join(cfg["outputs"]["results_dir"], "comparison_metrics.json")
         save_json(aggregated_results, output_path)
         print(json.dumps(aggregated_results, indent=2))
+        
+        # After evaluation, automatically trigger post-training pipeline
+        try:
+            import subprocess
+            results_dir = cfg["outputs"]["results_dir"]
+            figures_dir = os.path.join(results_dir, "figures")
+            config_file = "config.yaml"
+            
+            print("\n" + "="*80)
+            print("🚀 Triggering post-training automation...")
+            print("="*80)
+            
+            subprocess.run([
+                "python", "-m", "src.post_training",
+                "--config", config_file,
+                "--results-dir", results_dir,
+                "--figures-dir", figures_dir
+            ], check=False)
+        except Exception as e:
+            print(f"⚠️ Post-training automation skipped: {e}")
 
 
 if __name__ == "__main__":

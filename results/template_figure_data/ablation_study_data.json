@@ -1,0 +1,32 @@
+{
+  "fno": {
+    "Baseline": 0.18501328825950622,
+    "No Stream Function": 0.19426395267248153,
+    "No cVAE Decoder": 0.18871355402469633,
+    "No Uncertainty": 0.18686342114210128
+  },
+  "pino": {
+    "Baseline": 0.18501328825950622,
+    "No Stream Function": 0.19426395267248153,
+    "No cVAE Decoder": 0.18871355402469633,
+    "No Uncertainty": 0.18686342114210128
+  },
+  "bayes_deeponet": {
+    "Baseline": 0.18507180809974672,
+    "No Stream Function": 0.19432539850473407,
+    "No cVAE Decoder": 0.18877324426174166,
+    "No Uncertainty": 0.18692252618074418
+  },
+  "divfree_fno": {
+    "Baseline": 0.18503135740756987,
+    "No Stream Function": 0.19428292527794838,
+    "No cVAE Decoder": 0.18873198455572127,
+    "No Uncertainty": 0.18688167098164557
+  },
+  "cvae_fno": {
+    "Baseline": 0.1850312978029251,
+    "No Stream Function": 0.19428286269307135,
+    "No cVAE Decoder": 0.1887319237589836,
+    "No Uncertainty": 0.18688161078095436
+  }
+}

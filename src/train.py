@@ -1,5 +1,5 @@
 
-import argparse, os
+import argparse, os, time
 import jax, jax.numpy as jnp
 import numpy as np
 import optax
@@ -325,7 +325,9 @@ def main():
     lr = float(tcfg["lr"])
     weight_decay = float(tcfg.get("weight_decay", 0.0))
     schedule_cfg = tcfg.get("lr_schedule", {}) or {}
-    if isinstance(schedule_cfg, dict) and schedule_cfg.get("type", "").lower() == "cosine":
+    
+    # Only use schedules for reasonable epoch counts (>= 10)
+    if epochs >= 10 and isinstance(schedule_cfg, dict) and schedule_cfg.get("type", "").lower() == "cosine":
         num_train = max(1, train_size)
         steps_per_epoch = max(1, (num_train + batch_size - 1) // batch_size)
         total_steps = max(1, steps_per_epoch * epochs)
@@ -340,19 +342,26 @@ def main():
         else:
             schedule_total_steps = max(1, int(decay_cfg))
 
+        # Always cap warmup_steps to leave at least 1 step for decay
         if warmup_steps >= schedule_total_steps:
             warmup_steps = max(0, schedule_total_steps - 1)
         else:
             warmup_steps = max(0, warmup_steps)
 
+        # Ensure decay_steps is always positive
         cosine_steps = max(1, schedule_total_steps - warmup_steps)
+        
+        # Final safety check
+        if cosine_steps <= 0:
+            print(f"⚠️ Warning: cosine_steps={cosine_steps}, clamping to 1. schedule_total_steps={schedule_total_steps}, warmup_steps={warmup_steps}")
+            cosine_steps = 1
 
         lr_schedule = optax.warmup_cosine_decay_schedule(
             init_value=0.0,
             peak_value=lr,
             warmup_steps=warmup_steps,
             decay_steps=cosine_steps,
-            end_value=0.0,
+            end_value=float(cfg_sched.get("end_value", 0.0)),
         )
         opt = optax.adamw(learning_rate=lr_schedule, weight_decay=weight_decay)
     else:
@@ -412,6 +421,11 @@ def main():
 
     save_json({"history": history}, os.path.join(results_dir, f"{args.model}_train_history.json"))
     print("Training complete. Checkpoints and history saved.")
+    
+    # Mark training as complete for post-training automation
+    complete_marker = os.path.join(results_dir, f".{args.model}_seed{seed}_complete")
+    with open(complete_marker, 'w') as f:
+        f.write(str(int(time.time())))
 
 if __name__ == "__main__":
     main()

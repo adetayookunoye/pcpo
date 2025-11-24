@@ -10,7 +10,10 @@
     "mean_speed_pred": 3.140696571790613e-05,
     "mean_speed_true": 0.19758260250091553,
     "spectra_ratio_mean": 3.0790529251098633,
-    "spectra_ratio_std": 410.40032958984375
+    "spectra_ratio_std": 410.40032958984375,
+    "coverage_90": NaN,
+    "sharpness": NaN,
+    "crps": NaN
   },
   "pino": {
     "l2": 0.1982458233833313,
@@ -23,7 +26,10 @@
     "mean_speed_pred": 3.140696571790613e-05,
     "mean_speed_true": 0.19758260250091553,
     "spectra_ratio_mean": 3.0790529251098633,
-    "spectra_ratio_std": 410.40032958984375
+    "spectra_ratio_std": 410.40032958984375,
+    "coverage_90": NaN,
+    "sharpness": NaN,
+    "crps": NaN
   },
   "bayes_deeponet": {
     "l2": 0.19842800498008728,
@@ -36,7 +42,10 @@
     "mean_speed_pred": 0.011219542473554611,
     "mean_speed_true": 0.19758260250091553,
     "spectra_ratio_mean": 53302220.0,
-    "spectra_ratio_std": 3709133824.0
+    "spectra_ratio_std": 3709133824.0,
+    "coverage_90": NaN,
+    "sharpness": NaN,
+    "crps": NaN
   },
   "divfree_fno": {
     "l2": 0.19826863706111908,
@@ -49,7 +58,10 @@
     "mean_speed_pred": 1.222884384333156e-05,
     "mean_speed_true": 0.19758260250091553,
     "spectra_ratio_mean": 6.452164961956441e-05,
-    "spectra_ratio_std": 0.004123279359191656
+    "spectra_ratio_std": 0.004123279359191656,
+    "coverage_90": NaN,
+    "sharpness": NaN,
+    "crps": NaN
   },
   "cvae_fno": {
     "l2": 0.19826830923557281,

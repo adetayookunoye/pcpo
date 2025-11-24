@@ -1,0 +1,27 @@
+{
+  "fno": {
+    "vort_pred_mean": 0.03507012277841568,
+    "vort_pred_std": 0.002019763498604964,
+    "vort_error": 0.04208414733409881
+  },
+  "pino": {
+    "vort_pred_mean": 0.03507012277841568,
+    "vort_pred_std": 0.002019763498604964,
+    "vort_error": 0.04208414733409881
+  },
+  "bayes_deeponet": {
+    "vort_pred_mean": 0.035074181854724884,
+    "vort_pred_std": 0.0020172127688695583,
+    "vort_error": 0.04208901822566986
+  },
+  "divfree_fno": {
+    "vort_pred_mean": 0.03507356122136116,
+    "vort_pred_std": 0.0020175241040322543,
+    "vort_error": 0.042088273465633395
+  },
+  "cvae_fno": {
+    "vort_pred_mean": 0.03507356345653534,
+    "vort_pred_std": 0.00201750305929447,
+    "vort_error": 0.042088276147842406
+  }
+}

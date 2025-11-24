@@ -34,9 +34,20 @@ def spectrum(field):
     return ps
 
 def spectra_distance(u_pred, v_pred, u_ref, v_ref):
-    sp = spectrum(u_pred) + spectrum(v_pred)
-    sr = spectrum(u_ref) + spectrum(v_ref)
-    return l2(sp, sr)
+    """Compute normalized L2 distance between spectral energy distributions.
+    
+    Uses log-binned spectra for better resolution across scales.
+    """
+    sp_pred = spectrum(u_pred) + spectrum(v_pred)
+    sp_ref = spectrum(u_ref) + spectrum(v_ref)
+    
+    # Normalize by reference energy to make metric scale-invariant
+    ref_energy = jnp.sqrt(jnp.mean(sp_ref ** 2))
+    if ref_energy < 1e-10:
+        return 0.0
+    
+    normalized_dist = l2(sp_pred, sp_ref) / ref_energy
+    return normalized_dist
 
 
 def _log_binned_energy_spectrum(u: jnp.ndarray, v: jnp.ndarray, num_bins: int = 32) -> jnp.ndarray:
