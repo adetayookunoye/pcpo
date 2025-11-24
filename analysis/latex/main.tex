@@ -118,7 +118,7 @@ Recent work has explored constraint-aware neural operators more systematically. 
 
 Additionally, several recent works address hard constraints in probabilistic settings. Xu et al. developed Physically Consistent Neural Operators (PCNO) that project outputs onto constraint-satisfying subspaces, and extended this to DiffPCNO which adds diffusion-model-based uncertainty quantification. Hansen et al. presented a framework for learning probabilistic models that respect conservation laws by leveraging uncertainty itself to enforce constraints. More recently, a framework termed end-to-end probabilistic learning with hard constraints (ProbHardE2E) combines probabilistic FNO bases with projection layers to guarantee constraint satisfaction.
 
-Our contribution is not to originate the stream-function idea or hard constraints in neural operators, but rather to provide a clean implementation of stream-function FNO for 2D incompressible flows, extend it to probabilistic inference via conditional VAE, and conduct rigorous empirical comparison on PDEBench with multi-seed evaluation and bootstrap confidence intervals.
+Our contribution is not to originate the stream-function idea or hard constraints in neural operators, but rather to provide a clean implementation of stream-function FNO for 2D incompressible flows, extend it to probabilistic inference via conditional VAE, and conduct rigorous empirical comparison on PDEBench with multi-seed evaluation and bootstrap confidence intervals. We additionally provide a general theoretical framework for constrained operator learning (Appendix A), which unifies parameterization-based (Pattern A) and projection-based (Pattern B) approaches under two universal approximation theorems, providing a principled foundation for hard constraint enforcement in neural operators.
 
 \subsection{Adaptive Loss Weighting for Physics-Informed Methods}
 
@@ -220,6 +220,8 @@ Given input $x \in \mathbb{R}^{B \times H \times W \times 2}$ (batch of velocity
 \end{enumerate}
 \end{definition}
 
+\textbf{Theoretical Justification:} By Theorem~\ref{thm:ua-param} (Appendix A), this parameterization-based approach universally approximates divergence-free operators. The stream function parameterization implements \textbf{Pattern A} from our general framework, ensuring that the network can learn any divergence-free mapping with arbitrary precision while maintaining the hard constraint $\nabla \cdot \mathbf{u} = 0$ by construction.
+
 The derivative operations use central finite differences:
 \begin{align}
   D_y(\psi)_{i,j} &= \frac{\psi_{i+1,j} - \psi_{i-1,j}}{2 \Delta y} \\
@@ -312,7 +314,7 @@ The VAE loss is:
 Every sample from cVAE-FNO automatically inherits the divergence-free guarantee. For any $z \sim q_\phi(z|x)$, the decoded $(u, v)$ satisfies $\nabla \cdot (u, v) = 0$ exactly (up to discretization).
 \end{proposition}
 
-The combination of stream-function parameterization with conditional VAE ensures that all samples from the learned distribution are physically valid. We empirically study calibration and diversity of the predictive distribution on PDEBench.
+\textbf{Theoretical Grounding:} This proposition follows from Theorem~\ref{thm:ua-param} applied to the decoder: since we parameterize via stream functions, every sample $z$ generates a divergence-free field by construction. Unlike projection-based methods (Pattern B, Theorem~\ref{thm:ua-proj}), no post-hoc correction is needed. The combination of stream-function parameterization with conditional VAE ensures that all samples from the learned distribution are physically valid while maintaining the ability to capture multimodality through the latent distribution. We empirically study calibration and diversity of the predictive distribution on PDEBench.
 
 \subsection{Multi-Constraint Framework via Helmholtz Decomposition}
 \label{sec:method-multi}
@@ -1190,7 +1192,7 @@ Our work is one of few systematically exploring hard constraints for differentia
   \item \cite{ummenhofer2020lagrangian} (graph neural networks with momentum conservation)
 \end{enumerate}
 
-Stream function approach is the first for spectral operators.
+Stream function approach is the first for spectral operators. We provide formal justification in Appendix A (Theorem~\ref{thm:hard-vs-soft}), which establishes that hard constraints via architecture provide exact satisfaction (independent of optimization), while soft constraints via penalties guarantee only approximate satisfaction proportional to the penalty weight.
 
 \subsection{Conservation Laws in ML}
 
